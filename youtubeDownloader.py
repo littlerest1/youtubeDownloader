@@ -5,8 +5,9 @@
 # -*- coding: UTF-8 -*-
 import unicodedata
 from bs4 import BeautifulSoup
+import requests 
 import urllib
-from datetime import datetime
+from datetime import datetime,date
 from urllib.request import urlopen
 from pytube import *
 import sys
@@ -17,25 +18,35 @@ import os
 #<span class="view-count style-scope yt-view-count-renderer">977,770,033次观看</span>
 #<yt-formatted-string class="style-scope ytd-video-primary-info-renderer">2018年6月4日</yt-formatted-string>
 #<yt-formatted-string id="text" class="style-scope ytd-toggle-button-renderer style-default-active" aria-label="918,870 人顶过">91万</yt-formatted-string>
-def Video_info(url):
-    html = urlopen(url).read().decode('utf-8')   
-    
-    soup = BeautifulSoup(html, "html.parser")
-    date = soup.find('div', {'id' : 'info-text'})
-    d = str(date)
-    print(d)
 
-'''
-    spans = soup.find('span', {'class' : 'view-count'})
-    inf = str(spans)
-    count = inf.split('>')[1]
-    countV = count.split('<')[0]
-    print(countV)
-'''
-    
+# creating function 
+def scrape_info(url): 
+	
+	# getting the request from url 
+	r = requests.get(url) 
+	
+	# converting the text 
+	s = BeautifulSoup(r.text, "html.parser") 
+	
+    # finding meta info for title 
+	title = s.find("span", class_="watch-title").text.replace("\n", "") 
+
+    # finding publish date
+	publish = s.find('strong', 'watch-time-text').get_text()
+	publish = publish.replace("Published on ", "")
+
+    # finding meta info for views 
+	views = s.find("div", class_="watch-view-count").text 
+
+	# finding meta info for likes 
+	likes = s.find("span", class_="like-button-renderer").span.button.text 
+
+	# saving this data in dictionary 
+	data = {'title':title, 'views':views.replace(" views",""), 'likes':likes,'date':publish.replace("Premiered ","")} 
+	
+	# returning the dictionary 
+	return data 
   
-       
-
 def compare_strs(s1, s2):
   str1 = ""
   str2 = ""
@@ -45,61 +56,74 @@ def compare_strs(s1, s2):
       str2 += str(ord(k))
   return str1 in str2
 
+if __name__ == "__main__": 
+    # get the link from argument and use beautiful soup to extract video info
+    link = sys.argv[1]
+    data = scrape_info(link) 
+    print("Video Information ")
+    print("title:",data['title'])
+    print("publish date:",data['date'])
+    print("views",data['views'])
+    print("likes:", data['likes'])
 
-link = sys.argv[1]
-quality = 'no'
-format = 'mp4'
-subtitle = False
-language = 'en'
-if len(sys.argv) > 2 and sys.argv[2] == 'mp3':
-    format = 'mp3'
+    # get the download requirement 
+    quality = 'no'
+    format = 'mp4'
+    subtitle = False
+    language = 'en'
+    if len(sys.argv) > 2 and sys.argv[2] == 'mp3':
+        format = 'mp3'
 
-if len(sys.argv) > 3:
-    if sys.argv[3] != 'no':
-        quality = sys.argv[3]
-    if len(sys.argv) > 4:
-        subtitle = True
-        language = sys.argv[4]
+    if len(sys.argv) > 3:
+        if sys.argv[3] != 'no':
+            quality = sys.argv[3]
+        if len(sys.argv) > 4:
+            subtitle = True
+            language = sys.argv[4]
+    
+    print("Downloading  ",link,quality,subtitle,format,language)
+    yt = YouTube(link)
+    title = yt.title
+    print("title  ", title)
+    #print(yt.captions.all()) # check the avaliable captions
+    
+    # download video clip by specific requirement
+    if format == 'mp3':
+        # filter the audio link and download audio only and change the file format in folder
+        yt.streams.filter(only_audio=True)[0].download()
+        files = os.listdir('.')
+        files.sort(key=os.path.getctime,reverse=True)
+        for f in files :
+            if "." in f and f.split('.')[1] == 'mp4':
+                os.rename(f,f.split('.')[0]+'.mp3')
+                print("Converting to mp3")
+                break
+    
+    # download video clip in mp4 format and if quliaty is not specify it will use the first link to download
+    elif format == 'mp4' and quality != 'no':
+        streams = yt.streams.first()
+        streams.download()
+    ''' 
+     if subtitle caption download required download it in both srt and txt format so that I can checkout and change
+     if I need to add some comments or addition
+     caption file will use download time as file name for use e.g. dmy-hms
+    '''
+    if subtitle == True:
+        today = date.today()
+        # today's date in day month year e.g. 19052020
+        current_date = today.strftime("%d%m%Y")
+        now = datetime.now()
+        # current time = date + current time in hour minutes second  e.g. filename = 19052020-194403
+        current_time = current_date + '-' + now.strftime("%H%M%S")
 
-print("Downloading  ",link,quality,subtitle,format,language)
-yt = YouTube(link)
-title = yt.title
-print("title  ", title)
-print("Video Information ")
-#print(yt.captions.all())
-#Video_info(link)
-
-if format == 'mp3':
-       # print(yt.streams.filter(only_audio=True))
-   # t = yt.streams.filter(only_audio=True).first()
-   # print(yt.streams.all())
-   # print(yt.streams.filter(only_audio=True)[0])
-    yt.streams.filter(only_audio=True)[0].download()
-    files = os.listdir('.')
-    files.sort(key=os.path.getctime,reverse=True)
-    for f in files :
-       print(f)
-       if "." in f and f.split('.')[1] == 'mp4':
-          os.rename(f,f.split('.')[0]+'.mp3')
-          print("Converting to mp3")
-          break
-   # tempT = os.getcwd() + '/' + yt.title + '.mp3'
-    #os.rename(title,tempT)
-elif format == 'mp4' and quality != 'no':
-    streams = yt.streams.first()
-    streams.download()
-if subtitle == True:
-    now = datetime.now()
-    current_time = now.strftime("%H%M%S")
-
-    file1 = open(current_time+'.txt',"w+") 
-    file2 = open(current_time+'.srt',"w+")
-    caption = yt.captions.get_by_language_code(language) 
-    str = caption.generate_srt_captions()
-    print("Downloading caption",language)
-    file2.write(str)
-    file1.write(str)
-    file1.close()
-    file2.close()
-    #print(caption.generate_srt_captions())
+        file1 = open(current_time+'.txt',"w+") 
+        file2 = open(current_time+'.srt',"w+")
+        caption = yt.captions.get_by_language_code(language) 
+        str = caption.generate_srt_captions()
+        print("Downloading caption",language)
+        file2.write(str)
+        file1.write(str)
+        file1.close()
+        file2.close()
+        #print(caption.generate_srt_captions())
 
